@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FIO Workload Analyzer</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+<link href="css/style.css" rel="stylesheet">
+</head>
+<body>
+
+<!-- ── Navbar ─────────────────────────────────────────────────────────────── -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark-panel border-bottom border-surface">
+  <div class="container-fluid">
+    <a class="navbar-brand fw-bold" href="#">
+      <i class="bi bi-activity text-accent"></i> FIO Analyzer
+    </a>
+    <div class="d-flex align-items-center gap-3">
+      <span id="api-status" class="badge bg-danger"><i class="bi bi-circle-fill me-1"></i>Offline</span>
+      <span class="text-muted small" id="clock"></span>
+    </div>
+  </div>
+</nav>
+
+<!-- ── Tab bar ────────────────────────────────────────────────────────────── -->
+<ul class="nav nav-tabs nav-fill border-bottom border-surface px-3 pt-2 bg-dark-panel" id="mainTabs">
+  <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tab-dashboard"><i class="bi bi-speedometer2 me-1"></i>Dashboard</a></li>
+  <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-new"><i class="bi bi-plus-circle me-1"></i>New Test</a></li>
+  <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-results"><i class="bi bi-bar-chart-line me-1"></i>Results</a></li>
+  <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-logs"><i class="bi bi-journal-text me-1"></i>Logs</a></li>
+  <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-analysis"><i class="bi bi-graph-up-arrow me-1"></i>Analysis</a></li>
+  <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-ml"><i class="bi bi-cpu me-1"></i>ML Insights</a></li>
+</ul>
+
+<div class="tab-content px-3 py-3">
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- TAB: Dashboard                                                          -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<div class="tab-pane fade show active" id="tab-dashboard">
+  <div class="row g-3 mb-4">
+    <div class="col-md-3">
+      <div class="stat-card">
+        <div class="stat-label">Total Sessions</div>
+        <div class="stat-value" id="dash-total-sessions">—</div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="stat-card">
+        <div class="stat-label">Running</div>
+        <div class="stat-value text-accent" id="dash-running">—</div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="stat-card">
+        <div class="stat-label">Completed</div>
+        <div class="stat-value text-green" id="dash-completed">—</div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="stat-card">
+        <div class="stat-label">Failed</div>
+        <div class="stat-value text-red" id="dash-failed">—</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="d-flex justify-content-between align-items-center mb-2">
+    <h5 class="mb-0">Recent Sessions</h5>
+    <button class="btn btn-sm btn-outline-accent" onclick="App.loadDashboard()">
+      <i class="bi bi-arrow-clockwise"></i> Refresh
+    </button>
+  </div>
+  <div id="session-list"></div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- TAB: New Test                                                           -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<div class="tab-pane fade" id="tab-new">
+  <div class="row g-4">
+
+    <!-- Left: Configuration -->
+    <div class="col-lg-7">
+      <div class="card-panel">
+        <h5 class="mb-3"><i class="bi bi-gear me-2 text-accent"></i>Test Configuration</h5>
+
+        <div class="mb-3 row g-2">
+          <div class="col-md-6">
+            <label class="form-label">Session Name</label>
+            <input type="text" class="form-control" id="cfg-name" placeholder="My SSD Test">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Tags (comma-separated)</label>
+            <input type="text" class="form-control" id="cfg-tags" placeholder="baseline, nvme, day0">
+          </div>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Description</label>
+          <textarea class="form-control" id="cfg-description" rows="2" placeholder="Optional description"></textarea>
+        </div>
+
+        <!-- Device -->
+        <div class="mb-3 row g-2 align-items-end">
+          <div class="col-md-7">
+            <label class="form-label">Target Device / File</label>
+            <input type="text" class="form-control" id="cfg-device" placeholder="/dev/nvme0n1">
+          </div>
+          <div class="col-md-5">
+            <button class="btn btn-outline-secondary w-100" onclick="FioConfig.discoverDrives()">
+              <i class="bi bi-search me-1"></i>Discover Drives
+            </button>
+          </div>
+        </div>
+        <div id="drive-list" class="mb-3"></div>
+
+        <hr class="border-surface">
+
+        <!-- Profile selector -->
+        <div class="mb-3">
+          <label class="form-label">Workload Profile</label>
+          <div class="d-flex flex-wrap gap-2" id="profile-buttons"></div>
+          <div class="form-text">Select a preset or use Custom to define jobs manually.</div>
+        </div>
+
+        <!-- Custom job builder (shown when Custom selected) -->
+        <div id="custom-job-panel">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <h6 class="mb-0">Jobs</h6>
+            <button class="btn btn-sm btn-outline-accent" onclick="FioConfig.addJobRow()">
+              <i class="bi bi-plus"></i> Add Job
+            </button>
+          </div>
+          <div id="job-rows"></div>
+        </div>
+
+        <!-- Global overrides -->
+        <hr class="border-surface">
+        <h6>Global Settings</h6>
+        <div class="row g-2">
+          <div class="col-md-3">
+            <label class="form-label small">Duration (s)</label>
+            <input type="number" class="form-control" id="cfg-runtime" value="60" min="5">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label small">Ramp Time (s)</label>
+            <input type="number" class="form-control" id="cfg-ramp" value="10" min="0">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label small">IO Engine</label>
+            <select class="form-select" id="cfg-ioengine">
+              <option>libaio</option>
+              <option>io_uring</option>
+              <option>posixaio</option>
+              <option>sync</option>
+              <option>mmap</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label small">Size</label>
+            <input type="text" class="form-control" id="cfg-size" value="100%">
+          </div>
+        </div>
+        <div class="row g-2 mt-1">
+          <div class="col-md-4">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="cfg-direct" checked>
+              <label class="form-check-label" for="cfg-direct">Direct I/O</label>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="cfg-capture-logs" checked>
+              <label class="form-check-label" for="cfg-capture-logs">Capture Logs</label>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="cfg-group-reporting" checked>
+              <label class="form-check-label" for="cfg-group-reporting">Group Reporting</label>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-4 d-flex gap-2">
+          <button class="btn btn-accent flex-grow-1" onclick="FioConfig.submit()">
+            <i class="bi bi-play-fill me-1"></i>Run Test
+          </button>
+          <button class="btn btn-outline-secondary" onclick="FioConfig.reset()">
+            <i class="bi bi-arrow-counterclockwise"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: Live output -->
+    <div class="col-lg-5">
+      <div class="card-panel h-100 d-flex flex-col">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h5 class="mb-0"><i class="bi bi-terminal me-2 text-accent"></i>Live Output</h5>
+          <div class="d-flex gap-2">
+            <span id="live-status" class="badge bg-secondary">Idle</span>
+            <button class="btn btn-sm btn-outline-secondary" onclick="FioConfig.clearOutput()">Clear</button>
+          </div>
+        </div>
+        <div id="live-progress" class="mb-2" style="display:none">
+          <div class="progress" style="height:6px">
+            <div class="progress-bar progress-bar-striped progress-bar-animated bg-accent" id="live-progress-bar" style="width:0%"></div>
+          </div>
+          <div class="d-flex justify-content-between mt-1">
+            <small id="live-job-label" class="text-muted"></small>
+            <small id="live-elapsed" class="text-muted"></small>
+          </div>
+        </div>
+        <div class="terminal-output flex-grow-1" id="live-output"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- TAB: Results                                                            -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<div class="tab-pane fade" id="tab-results">
+  <div class="row g-3 mb-3 align-items-center">
+    <div class="col-md-5">
+      <select class="form-select" id="results-session-select" onchange="Results.load()">
+        <option value="">— Select a session —</option>
+      </select>
+    </div>
+    <div class="col-auto">
+      <button class="btn btn-outline-accent" onclick="Results.generatePlots()">
+        <i class="bi bi-image me-1"></i>Generate Plots
+      </button>
+      <button class="btn btn-outline-green ms-2" onclick="Results.downloadExcel()">
+        <i class="bi bi-file-earmark-excel me-1"></i>Export Excel
+      </button>
+    </div>
+  </div>
+
+  <!-- Summary cards -->
+  <div class="row g-3 mb-4" id="results-kpi-row" style="display:none!important"></div>
+
+  <!-- Charts row -->
+  <div class="row g-4 mb-4" id="results-charts-row"></div>
+
+  <!-- Results table -->
+  <div class="card-panel">
+    <h6 class="mb-3">Job Results</h6>
+    <div class="table-responsive">
+      <table class="table table-dark table-hover table-sm mb-0">
+        <thead id="results-thead"></thead>
+        <tbody id="results-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Plot gallery -->
+  <div class="mt-4" id="plot-gallery"></div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- TAB: Logs                                                               -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<div class="tab-pane fade" id="tab-logs">
+  <div class="row g-3 mb-3 align-items-center">
+    <div class="col-md-4">
+      <select class="form-select" id="logs-session-select" onchange="LogViewer.load()">
+        <option value="">— Select a session —</option>
+      </select>
+    </div>
+    <div class="col-md-3">
+      <select class="form-select" id="logs-phase-filter" onchange="LogViewer.load()">
+        <option value="">All phases</option>
+        <option value="pre">Pre-test</option>
+        <option value="post">Post-test</option>
+      </select>
+    </div>
+    <div class="col-md-3">
+      <select class="form-select" id="logs-type-filter" onchange="LogViewer.load()">
+        <option value="">All types</option>
+        <option value="dmesg">dmesg</option>
+        <option value="journal_kernel">journal (kernel)</option>
+        <option value="nvme_smart">NVMe SMART</option>
+        <option value="nvme_error_log">NVMe Error Log</option>
+        <option value="blkstat">blkstat</option>
+        <option value="iostat">iostat</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-md-4">
+      <div id="log-list" class="log-file-list"></div>
+    </div>
+    <div class="col-md-8">
+      <div class="card-panel h-100">
+        <div class="d-flex justify-content-between mb-2">
+          <h6 id="log-viewer-title" class="mb-0 text-muted">Select a log entry</h6>
+          <button class="btn btn-sm btn-outline-secondary" onclick="LogViewer.copyContent()">
+            <i class="bi bi-clipboard me-1"></i>Copy
+          </button>
+        </div>
+        <pre class="log-content-view" id="log-content-view"></pre>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- TAB: Analysis                                                           -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<div class="tab-pane fade" id="tab-analysis">
+  <div class="row g-4">
+    <div class="col-lg-8">
+      <!-- Session comparison -->
+      <div class="card-panel mb-4">
+        <h5 class="mb-3"><i class="bi bi-bar-chart-line me-2 text-accent"></i>Session Comparison</h5>
+        <div class="mb-2 d-flex gap-2">
+          <select class="form-select" id="cmp-session-select" multiple style="height:120px">
+          </select>
+          <div>
+            <button class="btn btn-accent" onclick="Analysis.compare()">Compare</button>
+          </div>
+        </div>
+        <div id="comparison-table"></div>
+      </div>
+
+      <!-- Interactive chart -->
+      <div class="card-panel">
+        <div class="d-flex justify-content-between mb-3">
+          <h5 class="mb-0"><i class="bi bi-graph-up me-2 text-accent"></i>Interactive Chart</h5>
+          <div class="d-flex gap-2">
+            <select class="form-select form-select-sm" id="chart-x-axis" style="width:140px">
+              <option value="iodepth">Queue Depth</option>
+              <option value="bs">Block Size</option>
+              <option value="runtime_s">Duration (s)</option>
+            </select>
+            <select class="form-select form-select-sm" id="chart-y-axis" style="width:160px">
+              <option value="read_iops">Read IOPS</option>
+              <option value="write_iops">Write IOPS</option>
+              <option value="read_p99_us">Read P99 Lat (µs)</option>
+              <option value="write_p99_us">Write P99 Lat (µs)</option>
+              <option value="read_bw_mbps">Read BW (MB/s)</option>
+              <option value="write_bw_mbps">Write BW (MB/s)</option>
+            </select>
+            <select class="form-select form-select-sm" id="chart-session-select" style="width:200px">
+              <option value="">All sessions</option>
+            </select>
+            <button class="btn btn-sm btn-accent" onclick="Analysis.renderChart()">Plot</button>
+          </div>
+        </div>
+        <canvas id="analysis-chart" height="300"></canvas>
+      </div>
+    </div>
+
+    <div class="col-lg-4">
+      <!-- Time-series drill-down -->
+      <div class="card-panel mb-4">
+        <h5 class="mb-3"><i class="bi bi-activity me-2 text-accent"></i>Time-Series Drilldown</h5>
+        <select class="form-select mb-2" id="ts-job-select" onchange="Analysis.loadTimeSeries()">
+          <option value="">— Select a job —</option>
+        </select>
+        <canvas id="ts-chart-iops" height="160" class="mb-2"></canvas>
+        <canvas id="ts-chart-lat"  height="160"></canvas>
+        <div class="mt-2" id="ts-stats-panel"></div>
+      </div>
+
+      <!-- Performance cliff detector -->
+      <div class="card-panel">
+        <h5 class="mb-3"><i class="bi bi-exclamation-triangle me-2 text-yellow"></i>Write Cliff Detector</h5>
+        <div id="cliff-results" class="text-muted small">Select a job above to run detection.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- TAB: ML Insights                                                        -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<div class="tab-pane fade" id="tab-ml">
+  <div class="row g-4">
+
+    <div class="col-lg-4">
+      <!-- Model Training -->
+      <div class="card-panel mb-4">
+        <h5 class="mb-3"><i class="bi bi-cpu me-2 text-accent"></i>Model Training</h5>
+        <p class="text-muted small">Train ML models on all stored test results. Requires at least 5–10 sessions.</p>
+        <div class="mb-2">
+          <div class="form-check"><input class="form-check-input" type="checkbox" id="ml-train-anomaly" checked><label class="form-check-label">Anomaly Detector</label></div>
+          <div class="form-check"><input class="form-check-input" type="checkbox" id="ml-train-age" checked><label class="form-check-label">Drive Age Regressor</label></div>
+          <div class="form-check"><input class="form-check-input" type="checkbox" id="ml-train-fw" checked><label class="form-check-label">FW Algorithm Fingerprint</label></div>
+          <div class="form-check"><input class="form-check-input" type="checkbox" id="ml-train-trend" checked><label class="form-check-label">Performance Trend</label></div>
+        </div>
+        <button class="btn btn-accent w-100" onclick="MLDash.train()">
+          <i class="bi bi-play-fill me-1"></i>Train Models
+        </button>
+        <div id="ml-train-result" class="mt-2"></div>
+      </div>
+
+      <!-- Session selector for inference -->
+      <div class="card-panel">
+        <h5 class="mb-3"><i class="bi bi-lightning me-2 text-yellow"></i>Run Inference</h5>
+        <select class="form-select mb-2" id="ml-session-select">
+          <option value="">— Select session —</option>
+        </select>
+        <button class="btn btn-outline-accent w-100" onclick="MLDash.predict()">
+          <i class="bi bi-search me-1"></i>Analyze Session
+        </button>
+      </div>
+    </div>
+
+    <div class="col-lg-8">
+      <!-- Results panels -->
+      <div id="ml-results-panel">
+        <div class="text-center text-muted py-5">
+          <i class="bi bi-cpu display-3 mb-3 d-block"></i>
+          Run inference to see ML insights for a session.
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</div><!-- /tab-content -->
+
+<!-- ── Toast container ────────────────────────────────────────────────────── -->
+<div class="toast-container position-fixed bottom-0 end-0 p-3" id="toast-container"></div>
+
+<!-- ── Job row template ───────────────────────────────────────────────────── -->
+<template id="job-row-template">
+  <div class="job-row card-panel p-2 mb-2 position-relative">
+    <button class="btn btn-sm btn-link text-red position-absolute top-0 end-0 m-1 remove-job-btn" onclick="FioConfig.removeJobRow(this)">
+      <i class="bi bi-x-lg"></i>
+    </button>
+    <div class="row g-2">
+      <div class="col-md-2">
+        <label class="form-label small">Pattern</label>
+        <select class="form-select form-select-sm rw-select">
+          <option value="randread">RandRead</option>
+          <option value="randwrite">RandWrite</option>
+          <option value="read">SeqRead</option>
+          <option value="write">SeqWrite</option>
+          <option value="randrw">RandRW</option>
+          <option value="rw">SeqRW</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small">Block Size</label>
+        <select class="form-select form-select-sm bs-select">
+          <option>512</option><option>4k</option><option>8k</option>
+          <option>16k</option><option>32k</option><option>64k</option>
+          <option selected>128k</option><option>256k</option>
+          <option>512k</option><option>1m</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small">Queue Depth</label>
+        <select class="form-select form-select-sm qd-select">
+          <option>1</option><option>2</option><option>4</option>
+          <option>8</option><option selected>16</option><option>32</option>
+          <option>64</option><option>128</option><option>256</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small">Num Jobs</label>
+        <input type="number" class="form-control form-control-sm numjobs-input" value="1" min="1" max="64">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small">RW Mix %R</label>
+        <input type="number" class="form-control form-control-sm rwmix-input" value="70" min="0" max="100">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small">Job Name</label>
+        <input type="text" class="form-control form-control-sm jobname-input" placeholder="auto">
+      </div>
+    </div>
+  </div>
+</template>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="js/app.js"></script>
+<script src="js/fio_config.js"></script>
+<script src="js/results.js"></script>
+<script src="js/charts.js"></script>
+<script src="js/ml_dashboard.js"></script>
+</body>
+</html>
