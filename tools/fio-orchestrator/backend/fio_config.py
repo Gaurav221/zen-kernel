@@ -16,7 +16,11 @@ def _kv(key: str, val: Any) -> str:
 
 
 def render_fio_file(cfg: FioStepConfig, log_dir: str, step_name: str) -> str:
-    """Render a complete .fio file string from a FioStepConfig."""
+    """Render a complete .fio file string from a FioStepConfig.
+
+    FIO job files use underscores for all option names; only the CLI
+    uses hyphens.  We write underscores everywhere and let fio parse it.
+    """
     lines: List[str] = []
 
     # [global]
@@ -24,9 +28,8 @@ def render_fio_file(cfg: FioStepConfig, log_dir: str, step_name: str) -> str:
     g = cfg.global_options
     global_dict = g.model_dump(exclude_none=True)
 
-    # Always use JSON output for parsing; normalise the key name
+    # output_format goes on the fio CLI, not in the job file
     global_dict.pop("output_format", None)
-    lines.append("output-format=json")
 
     # Inject log paths relative to step's log_dir
     safe = re.sub(r"[^a-zA-Z0-9_-]", "_", step_name)
@@ -35,8 +38,7 @@ def render_fio_file(cfg: FioStepConfig, log_dir: str, step_name: str) -> str:
     global_dict.setdefault("write_lat_log",  os.path.join(log_dir, safe))
 
     for k, v in global_dict.items():
-        k_fio = k.replace("_", "-") if k in _HYPHEN_KEYS else k
-        line = _kv(k_fio, v)
+        line = _kv(k, v)   # underscores as-is — fio job file syntax
         if line:
             lines.append(line)
 
@@ -47,30 +49,12 @@ def render_fio_file(cfg: FioStepConfig, log_dir: str, step_name: str) -> str:
         lines.append(f"[{job.name}]")
         job_dict = job.model_dump(exclude_none=True, exclude={"name", "description"})
         for k, v in job_dict.items():
-            k_fio = k.replace("_", "-") if k in _HYPHEN_KEYS else k
-            line = _kv(k_fio, v)
+            line = _kv(k, v)
             if line:
                 lines.append(line)
         lines.append("")
 
     return "\n".join(lines)
-
-
-# Keys that FIO spells with hyphens rather than underscores
-_HYPHEN_KEYS = {
-    "output_format", "time_based", "ramp_time", "fill_device",
-    "io_size", "fsync_on_close", "sync_file_range", "rate_iops",
-    "rate_min", "rate_process", "offset_increment", "random_distribution",
-    "cpus_allowed", "cpus_allowed_policy", "iomem_align", "log_avg_msec",
-    "log_compression", "log_store_compressed", "new_group", "exitall",
-    "exitall_on_error", "exec_prerun", "exec_postrun", "sqthread_poll",
-    "sqthread_poll_cpu", "random_generator", "write_bw_log", "write_iops_log",
-    "write_lat_log", "write_hist_log", "per_job_logs", "group_reporting",
-    "iodepth_batch", "iodepth_batch_complete_min", "iodepth_batch_complete_max",
-    "verify_pattern", "verify_fatal", "verify_dump", "do_verify",
-    "number_ios", "norandommap", "lockmem", "iomem", "bsrange", "bssplit",
-    "nrfiles", "openfiles", "prioclass", "startdelay",
-}
 
 
 # ─────────────────────────────── Templates ────────────────────────────────

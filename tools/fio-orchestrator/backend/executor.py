@@ -311,7 +311,7 @@ async def execute_flow(
 
     step_map = {s.id: s for s in steps}
     waves = topological_order(steps, edges)
-    step_statuses: Dict[str, StepStatus] = {s.id: s for s in run.steps}
+    step_statuses: Dict[str, StepStatus] = {s.step_id: s for s in run.steps}
 
     global_idx = 0  # sequential counter across all waves for dir naming
 
