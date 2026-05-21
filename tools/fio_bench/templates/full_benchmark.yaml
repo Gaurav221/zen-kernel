@@ -1,0 +1,193 @@
+name: full_storage_benchmark
+description: Comprehensive storage benchmark — kernel I/O path validation suite
+output_dir: ./fio_results
+
+global_fio:
+  filename: /tmp/fio_testfile
+  size: 4g
+  ioengine: libaio
+  direct: 1
+  time_based: 1
+  runtime: 60
+  numjobs: 4
+  group_reporting: 1
+
+steps:
+  # ── pre-test collection ──────────────────────────────────────────────────
+  - name: pre_system_info
+    type: command
+    description: Full system state before any I/O
+    enabled: true
+    commands:
+      - cmd: uname -r
+        label: kernel_version
+        timeout: 10
+        ignore_errors: false
+      - cmd: lsblk -o NAME,SIZE,TYPE,ROTA,SCHED,MODEL
+        label: block_devices
+        timeout: 10
+        ignore_errors: false
+      - cmd: cat /proc/cpuinfo | grep 'model name' | head -1
+        label: cpu_model
+        timeout: 10
+        ignore_errors: false
+      - cmd: free -h
+        label: memory
+        timeout: 10
+        ignore_errors: false
+      - cmd: cat /sys/block/*/queue/scheduler 2>/dev/null || true
+        label: io_schedulers
+        timeout: 10
+        ignore_errors: true
+      - cmd: cat /sys/block/*/queue/nr_requests 2>/dev/null || true
+        label: queue_nr_requests
+        timeout: 10
+        ignore_errors: true
+      - cmd: numactl --hardware 2>/dev/null || true
+        label: numa_topology
+        timeout: 10
+        ignore_errors: true
+
+  # ── warm up ──────────────────────────────────────────────────────────────
+  - name: warmup_seq_write
+    type: fio
+    description: Warm-up sequential write to pre-condition the device
+    enabled: true
+    fio:
+      rw: write
+      bs: 128k
+      iodepth: 32
+      numjobs: 2
+      runtime: 30
+      time_based: 1
+
+  - name: drop_caches_after_warmup
+    type: command
+    description: Drop OS page cache between tests for clean reads
+    enabled: true
+    commands:
+      - cmd: sync
+        label: sync
+        timeout: 30
+        ignore_errors: false
+      - cmd: echo 3 > /proc/sys/vm/drop_caches
+        label: drop_caches
+        sudo: true
+        timeout: 10
+        ignore_errors: true
+
+  # ── sequential bandwidth ──────────────────────────────────────────────────
+  - name: seq_read_128k
+    type: fio
+    description: Sequential read — peak bandwidth
+    enabled: true
+    fio:
+      rw: read
+      bs: 128k
+      iodepth: 32
+      numjobs: 4
+
+  - name: seq_write_128k
+    type: fio
+    description: Sequential write — peak bandwidth
+    enabled: true
+    fio:
+      rw: write
+      bs: 128k
+      iodepth: 32
+      numjobs: 4
+
+  - name: iostat_after_seq
+    type: command
+    description: I/O stats after sequential tests
+    enabled: true
+    commands:
+      - cmd: iostat -x 1 5
+        label: iostat
+        timeout: 30
+        ignore_errors: true
+
+  # ── random IOPS ───────────────────────────────────────────────────────────
+  - name: rand_read_4k_qd64
+    type: fio
+    description: Random read IOPS at high queue depth
+    enabled: true
+    fio:
+      rw: randread
+      bs: 4k
+      iodepth: 64
+      numjobs: 4
+
+  - name: rand_write_4k_qd64
+    type: fio
+    description: Random write IOPS at high queue depth
+    enabled: true
+    fio:
+      rw: randwrite
+      bs: 4k
+      iodepth: 64
+      numjobs: 4
+
+  # ── mixed workload ────────────────────────────────────────────────────────
+  - name: mixed_70_30_randrw
+    type: fio
+    description: Mixed random R/W 70/30 — typical database-like workload
+    enabled: true
+    fio:
+      rw: randrw
+      rwmixread: 70
+      bs: 4k
+      iodepth: 32
+      numjobs: 4
+
+  - name: iostat_after_random
+    type: command
+    description: I/O stats after random tests
+    enabled: true
+    commands:
+      - cmd: iostat -x 1 5
+        label: iostat
+        timeout: 30
+        ignore_errors: true
+
+  # ── latency profile ───────────────────────────────────────────────────────
+  - name: latency_qd1
+    type: fio
+    description: Minimum latency probe (queue depth 1)
+    enabled: true
+    fio:
+      rw: randread
+      bs: 4k
+      iodepth: 1
+      numjobs: 1
+      runtime: 30
+
+  - name: latency_qd1_write
+    type: fio
+    description: Write latency at queue depth 1
+    enabled: true
+    fio:
+      rw: randwrite
+      bs: 4k
+      iodepth: 1
+      numjobs: 1
+      runtime: 30
+
+  # ── post-test collection ──────────────────────────────────────────────────
+  - name: post_disk_stats
+    type: command
+    description: Final system stats after all tests
+    enabled: true
+    commands:
+      - cmd: iostat -x 1 5
+        label: iostat_final
+        timeout: 30
+        ignore_errors: true
+      - cmd: cat /proc/diskstats
+        label: diskstats
+        timeout: 10
+        ignore_errors: true
+      - cmd: dmesg | tail -50
+        label: dmesg_tail
+        timeout: 10
+        ignore_errors: true
