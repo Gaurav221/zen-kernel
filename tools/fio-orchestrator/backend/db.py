@@ -1,8 +1,8 @@
 """Async SQLite storage for flows and runs."""
 from __future__ import annotations
-import json
 import os
-from typing import List, Optional
+from contextlib import asynccontextmanager
+from typing import AsyncIterator, List, Optional
 
 import aiosqlite
 
@@ -11,12 +11,14 @@ from .models import Flow, RunRecord
 DB_PATH = os.environ.get("FIO_DB", "./fio_orchestrator.db")
 
 
-async def _conn():
-    return await aiosqlite.connect(DB_PATH)
+@asynccontextmanager
+async def _conn() -> AsyncIterator[aiosqlite.Connection]:
+    async with aiosqlite.connect(DB_PATH) as db:
+        yield db
 
 
 async def init_db():
-    async with await _conn() as db:
+    async with _conn() as db:
         await db.execute("""
             CREATE TABLE IF NOT EXISTS flows (
                 id TEXT PRIMARY KEY,
@@ -40,7 +42,7 @@ async def init_db():
 # ───────────────── Flow CRUD ──────────────────────────────────────────────
 
 async def save_flow(flow: Flow) -> None:
-    async with await _conn() as db:
+    async with _conn() as db:
         await db.execute(
             "INSERT OR REPLACE INTO flows (id, data, created_at, updated_at) VALUES (?,?,?,?)",
             (flow.id, flow.model_dump_json(), str(flow.created_at), str(flow.updated_at)),
@@ -49,7 +51,7 @@ async def save_flow(flow: Flow) -> None:
 
 
 async def get_flow(flow_id: str) -> Optional[Flow]:
-    async with await _conn() as db:
+    async with _conn() as db:
         async with db.execute("SELECT data FROM flows WHERE id=?", (flow_id,)) as cur:
             row = await cur.fetchone()
     if row:
@@ -58,14 +60,14 @@ async def get_flow(flow_id: str) -> Optional[Flow]:
 
 
 async def list_flows() -> List[Flow]:
-    async with await _conn() as db:
+    async with _conn() as db:
         async with db.execute("SELECT data FROM flows ORDER BY created_at DESC") as cur:
             rows = await cur.fetchall()
     return [Flow.model_validate_json(r[0]) for r in rows]
 
 
 async def delete_flow(flow_id: str) -> bool:
-    async with await _conn() as db:
+    async with _conn() as db:
         cur = await db.execute("DELETE FROM flows WHERE id=?", (flow_id,))
         await db.commit()
         return cur.rowcount > 0
@@ -74,7 +76,7 @@ async def delete_flow(flow_id: str) -> bool:
 # ───────────────── Run CRUD ───────────────────────────────────────────────
 
 async def save_run(run: RunRecord) -> None:
-    async with await _conn() as db:
+    async with _conn() as db:
         await db.execute(
             "INSERT OR REPLACE INTO runs (id, flow_id, data, status, started_at) VALUES (?,?,?,?,?)",
             (run.id, run.flow_id, run.model_dump_json(),
@@ -84,7 +86,7 @@ async def save_run(run: RunRecord) -> None:
 
 
 async def get_run(run_id: str) -> Optional[RunRecord]:
-    async with await _conn() as db:
+    async with _conn() as db:
         async with db.execute("SELECT data FROM runs WHERE id=?", (run_id,)) as cur:
             row = await cur.fetchone()
     if row:
@@ -93,7 +95,7 @@ async def get_run(run_id: str) -> Optional[RunRecord]:
 
 
 async def list_runs(flow_id: Optional[str] = None) -> List[RunRecord]:
-    async with await _conn() as db:
+    async with _conn() as db:
         if flow_id:
             async with db.execute(
                 "SELECT data FROM runs WHERE flow_id=? ORDER BY started_at DESC",
