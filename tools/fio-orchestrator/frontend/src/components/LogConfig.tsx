@@ -201,15 +201,16 @@ export default function LogConfig() {
   }
 
   const cfg = step.config as LogCollectStepConfig;
+  const stepId = step.id;
 
   function update(newCfg: LogCollectStepConfig) {
     if (!activeFlow) return;
-    setActiveFlow({ ...activeFlow, steps: activeFlow.steps.map(s => s.id === step.id ? { ...s, config: newCfg } : s) });
+    setActiveFlow({ ...activeFlow, steps: activeFlow.steps.map(s => s.id === stepId ? { ...s, config: newCfg } : s) });
   }
 
   function updateName(name: string) {
     if (!activeFlow) return;
-    setActiveFlow({ ...activeFlow, steps: activeFlow.steps.map(s => s.id === step.id ? { ...s, name } : s) });
+    setActiveFlow({ ...activeFlow, steps: activeFlow.steps.map(s => s.id === stepId ? { ...s, name } : s) });
   }
 
   return (

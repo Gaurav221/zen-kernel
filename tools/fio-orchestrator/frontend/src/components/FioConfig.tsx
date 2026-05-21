@@ -172,7 +172,7 @@ function JobEditor({
         <Inp label="iodepth_batch_complete_min" value={job.iodepth_batch_complete_min} onChange={(v) => upNum("iodepth_batch_complete_min", v)} type="number" />
         <Inp label="iodepth_batch_complete_max" value={job.iodepth_batch_complete_max} onChange={(v) => upNum("iodepth_batch_complete_max", v)} type="number" />
         <Toggle label="sqthread_poll (io_uring)" value={job.sqthread_poll} onChange={(v) => onChange({ ...job, sqthread_poll: v })} />
-        <Inp label="sqthread_poll_cpu" value={job.sqthread_poll_cpu} onChange={(v) => upNum("sqthread_poll_cpu", v)} type="number" />
+        <Inp label="sqthread_poll_cpu" value={job.sqthread_poll_cpu as number | undefined} onChange={(v) => upNum("sqthread_poll_cpu", v)} type="number" />
       </Section>
 
       <Section title="Buffering &amp; Sync">
@@ -269,13 +269,14 @@ export default function FioConfig() {
   }
 
   const cfg = step.config as FioStepConfig;
+  const stepId = step.id;
 
   function updateStep(newCfg: FioStepConfig) {
     if (!activeFlow) return;
     setActiveFlow({
       ...activeFlow,
       steps: activeFlow.steps.map((s) =>
-        s.id === step.id ? { ...s, config: newCfg } : s,
+        s.id === stepId ? { ...s, config: newCfg } : s,
       ),
     });
   }
@@ -285,7 +286,7 @@ export default function FioConfig() {
     setActiveFlow({
       ...activeFlow,
       steps: activeFlow.steps.map((s) =>
-        s.id === step.id ? { ...s, name } : s,
+        s.id === stepId ? { ...s, name } : s,
       ),
     });
   }

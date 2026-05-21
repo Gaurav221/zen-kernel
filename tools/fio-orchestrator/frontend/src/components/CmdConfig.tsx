@@ -10,14 +10,15 @@ export default function CmdConfig() {
   }
   const cfg = step.config as CommandStepConfig;
 
+  const stepId = step.id;
   function update(newCfg: CommandStepConfig) {
     if (!activeFlow) return;
-    setActiveFlow({ ...activeFlow, steps: activeFlow.steps.map(s => s.id === step.id ? { ...s, config: newCfg } : s) });
+    setActiveFlow({ ...activeFlow, steps: activeFlow.steps.map(s => s.id === stepId ? { ...s, config: newCfg } : s) });
   }
 
   function updateName(name: string) {
     if (!activeFlow) return;
-    setActiveFlow({ ...activeFlow, steps: activeFlow.steps.map(s => s.id === step.id ? { ...s, name } : s) });
+    setActiveFlow({ ...activeFlow, steps: activeFlow.steps.map(s => s.id === stepId ? { ...s, name } : s) });
   }
 
   const envStr = Object.entries(cfg.env).map(([k, v]) => `${k}=${v}`).join("\n");
